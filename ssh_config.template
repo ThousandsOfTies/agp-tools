@@ -1,0 +1,5 @@
+Host vibecode-graviton
+    HostName <EC2_PUBLIC_IP>
+    User ubuntu
+    IdentityFile ~/.ssh/vibecode-graviton.pem
+    ServerAliveInterval 60

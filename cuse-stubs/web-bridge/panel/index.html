@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hardware Simulator Panel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="panel-container">
+  <div class="panel-header">
+    <span class="panel-title">Virtual Hardware Panel</span>
+    <span class="conn-status" id="conn-status">● Disconnected</span>
+  </div>
+
+  <!-- GPIO Section -->
+  <div class="section">
+    <div class="section-title">GPIO</div>
+    <div class="devices-row">
+
+      <!-- LED 18 -->
+      <div class="device-card">
+        <div class="device-label">LED GPIO18</div>
+        <div class="led-indicator" id="led-18"></div>
+        <div class="device-sublabel" id="led-18-val">OFF</div>
+      </div>
+
+      <!-- LED 24 -->
+      <div class="device-card">
+        <div class="device-label">LED GPIO24</div>
+        <div class="led-indicator" id="led-24"></div>
+        <div class="device-sublabel" id="led-24-val">OFF</div>
+      </div>
+
+      <!-- Button 17 -->
+      <div class="device-card">
+        <div class="device-label">BTN GPIO17</div>
+        <button class="hw-button" id="btn-17"
+                onmousedown="sendButton(17,1)"
+                onmouseup="sendButton(17,0)"
+                ontouchstart="sendButton(17,1)"
+                ontouchend="sendButton(17,0)">PUSH</button>
+      </div>
+
+      <!-- Button 27 -->
+      <div class="device-card">
+        <div class="device-label">BTN GPIO27</div>
+        <button class="hw-button" id="btn-27"
+                onmousedown="sendButton(27,1)"
+                onmouseup="sendButton(27,0)"
+                ontouchstart="sendButton(27,1)"
+                ontouchend="sendButton(27,0)">PUSH</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- VL53L0X Section -->
+  <div class="section">
+    <div class="section-title">I2C — VL53L0X (ToF Distance)</div>
+    <div class="devices-row">
+      <div class="device-card wide">
+        <div class="device-label">Range</div>
+        <div class="range-display">
+          <span class="range-value" id="range-value">300</span>
+          <span class="range-unit">mm</span>
+        </div>
+        <div class="range-bar-bg">
+          <div class="range-bar-fill" id="range-bar"></div>
+        </div>
+        <div class="range-controls">
+          <span class="range-label">0mm</span>
+          <input type="range" min="0" max="2000" value="300" id="range-slider"
+                 oninput="sendRange(this.value)">
+          <span class="range-label">2000mm</span>
+        </div>
+        <div class="device-sublabel">← drag to simulate distance</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MFRC-522 Section -->
+  <div class="section">
+    <div class="section-title">SPI — MFRC-522 (RFID)</div>
+    <div class="devices-row">
+      <div class="device-card wide">
+        <div class="rfid-area" id="rfid-area">
+          <div class="rfid-icon">📡</div>
+          <div class="rfid-uid" id="rfid-uid">No card</div>
+        </div>
+        <div class="rfid-controls">
+          <button class="rfid-btn tap-btn" onclick="sendRfidTap()">Tap Card</button>
+          <button class="rfid-btn remove-btn" onclick="sendRfidRemove()">Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OLED Section -->
+  <div class="section">
+    <div class="section-title">I2C — SSD1306 OLED 128×64</div>
+    <div class="devices-row">
+      <div class="device-card">
+        <canvas id="oled-canvas" width="128" height="64"></canvas>
+        <div class="device-sublabel">SSD1306 128×64</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LCD HAT Section -->
+  <div class="section">
+    <div class="section-title">SPI — LCD HAT 240×240</div>
+    <div class="devices-row">
+      <div class="device-card">
+        <canvas id="lcd-canvas" width="240" height="240"></canvas>
+        <div class="device-sublabel">ST7789 240×240</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="panel.js"></script>
+</body>
+</html>
