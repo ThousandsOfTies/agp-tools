@@ -40,7 +40,7 @@
 
 ## 起動手順
 
-Codespaces で `make cross && make deploy-ec2 EC2=vibecode-graviton` 済みの前提です。
+Codespace build VM で `embedded-poc-app` と `agp-tools` を `make` 済みで、成果物を WSL hub 経由で EC2 に転送済みの前提です。
 
 ### ターミナル 1: ウェブブリッジ起動
 

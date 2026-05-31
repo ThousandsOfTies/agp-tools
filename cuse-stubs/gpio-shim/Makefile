@@ -2,7 +2,7 @@ CC     = gcc
 CFLAGS = -Wall -O2 -fPIC
 LDFLAGS = -shared -ldl -lpthread
 
-# Cross-compile: make CC=aarch64-linux-gnu-gcc
+# ARM build from this subdirectory: make CC=aarch64-linux-gnu-gcc
 TARGET = gpio_shim.so
 
 $(TARGET): gpio_shim.c

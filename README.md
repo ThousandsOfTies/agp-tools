@@ -13,27 +13,8 @@ AgentCockpit のシミュレーション環境で使うツール群です。
 ## Build
 
 ```bash
-make cross
-make native
+make
+make clean
 ```
 
-## Deploy To EC2
-
-```bash
-make deploy-ec2 EC2=vibecode-graviton
-```
-
-アプリ本体も同時に転送する場合:
-
-```bash
-make deploy-ec2 EC2=vibecode-graviton APP_BINARY=../embedded-poc-app/app/sensor_demo
-```
-
-## Simulation
-
-```bash
-make sim-start EC2=vibecode-graviton APP_BINARY=../embedded-poc-app/app/sensor_demo
-make panel-button EC2=vibecode-graviton LINE=17
-make panel-rfid EC2=vibecode-graviton
-make sim-logs EC2=vibecode-graviton
-```
+Codespace build VM では ARM64 向けにビルドします。EC2 への転送、simulation runtime 操作、Virtual Hardware 操作は WSL hub 側の AgentCockpit から行います。
