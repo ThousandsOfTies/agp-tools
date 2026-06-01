@@ -9,6 +9,7 @@ id_ed25519*
 
 # Build artifacts
 cuse-stubs/i2c-stub/cuse_i2c
+cuse-stubs/gpio-stub/cuse_gpio
 cuse-stubs/test/vl53l0x_read
 cuse-stubs/test/gpio_led_button
 cuse-stubs/gpio-shim/gpio_shim.so
