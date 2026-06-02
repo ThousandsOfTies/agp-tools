@@ -49,3 +49,56 @@ lines= 54
 The spike now proves that the CUSE node can be created and can answer a basic
 GPIO ioctl. It does not yet prove LED/Button bridge behavior, and it still does
 not solve the line-request fd handoff limitation described above.
+
+## Next steps for the agent (run on EC2)
+
+This `cuse_gpio` spike is a **dead end for transparent GPIO** (CUSE cannot hand a
+line-request fd to the caller — see "Important limitation"). Do **not** invest
+more in making it transparent. Instead, evaluate the kernel-backed `gpio-sim`
+path, which is the preferred candidate in
+[docs/12_CUSE_MIGRATION_PLAN.md §2.3](../../../AgentCockpit/docs/12_CUSE_MIGRATION_PLAN.md).
+
+Run these on EC2 Graviton (this dev box has no EC2 access; the agent on EC2 does):
+
+1. Check whether the running kernel provides `gpio-sim`:
+
+   ```bash
+   modinfo gpio-sim 2>/dev/null && echo "MODULE_OK" || echo "NO_MODULE"
+   zcat /proc/config.gz 2>/dev/null | grep -i gpio_sim || \
+     grep -i gpio_sim /boot/config-"$(uname -r)" 2>/dev/null
+   uname -r        # record kernel version (gpio-sim needs Linux 5.17+)
+   ```
+
+2. If `gpio-sim` is available, create a virtual chip via configfs and confirm a
+   real `/dev/gpiochipN` appears (this one DOES return real line fds):
+
+   ```bash
+   sudo modprobe gpio-sim
+   sudo mount -t configfs none /sys/kernel/config 2>/dev/null || true
+   cd /sys/kernel/config/gpio-sim
+   sudo mkdir agp && cd agp
+   echo 8 | sudo tee bank0/num_lines        # create bank0 dir first if needed
+   echo 1 | sudo tee live
+   ls -l /dev/ | grep gpiochip               # expect a new gpiochipN
+   ```
+
+   Then drive a line and verify with `gpioget`/`gpioset` (libgpiod):
+
+   ```bash
+   gpiodetect; gpioinfo                       # find the sim chip name
+   gpioset <sim-chip> 18=1                     # should NOT error on fd handoff
+   gpioget <sim-chip> 17
+   ```
+
+3. Report back ONE of:
+   - **GPIO_SIM_OK** + kernel version + the new `/dev/gpiochipN` name → we switch
+     the GPIO plan to gpio-sim and the web-bridge talks to its sysfs/configfs
+     value attributes instead of the bridge socket.
+   - **NO_GPIO_SIM** → fall back to the CUSE internal-virtual-fd design in
+     [docs/12 §4.2](../../../AgentCockpit/docs/12_CUSE_MIGRATION_PLAN.md), i.e. keep
+     a real line fd inside the daemon and multiplex follow-up ioctls on the main
+     fd (this is what `gpio_shim.so` already does in LD_PRELOAD form).
+
+Do NOT report "done" until LED18 toggle is actually reflected in the web panel
+and Button17 actually reaches `sensor_demo`. A passing `GPIO_GET_CHIPINFO_IOCTL`
+alone is NOT "done".

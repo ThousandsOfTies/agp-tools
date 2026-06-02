@@ -1,5 +1,7 @@
 # AgentCockpit 操作ガイド
 
+> このドキュメントは `agp-tools` リポジトリ単体での作業用抹です。最新・正本は上流の **AgentCockpit リポジトリ `docs/07_AI_AGENT_OPERATIONS.md`** を参照してください。
+
 AgentCockpit の狙いは、開発者が手順を覚えて操作する環境ではなく、**VSCode 上で AI エージェントがビルド、デプロイ、実行、仮想 H/W 操作、ログ確認まで担える環境**にすることです。
 
 そのために、EC2 simulation runtime は AgentCockpit 側の `agp sim`、ブラウザの Virtual Hardware Panel と同じ操作は AgentCockpit 側の HTTP API / Make ターゲットから実行します。
@@ -64,8 +66,8 @@ make panel-rfid-remove EC2=vibecode-graviton
 # VL53L0X 距離センサー値を変更
 make panel-range EC2=vibecode-graviton RANGE_MM=450
 
-# bridge の共有状態を JSON で取得
-agp sim state
+# bridge の共有状態を確認
+agp sim status
 ```
 
 ---
@@ -142,7 +144,7 @@ sensor_demo を EC2 にデプロイして、シミュレータを起動し、GPI
 agp sim start
 make panel-button EC2=vibecode-graviton LINE=17
 make panel-rfid EC2=vibecode-graviton UID=04:AB:CD:EF:01:23
-agp sim state
+agp sim status
 agp sim log
 make sim-test EC2=vibecode-graviton
 ```
