@@ -24,6 +24,10 @@ HTTP_PORT  = 8080
 WS_PORT    = 8765
 PANEL_DIR  = Path(__file__).parent / "panel"
 
+GPIO_SIM_ROOTS = tuple(Path("/sys/devices/platform").glob("gpio-sim.*/gpiochip*"))
+GPIO_SIM_INPUT_LINES = (17, 27)
+GPIO_SIM_OUTPUT_LINES = (18, 24)
+
 # ------------------------------------------------------------------ #
 # Shared state                                                         #
 # ------------------------------------------------------------------ #
@@ -46,6 +50,49 @@ state = {
 ws_clients: set = set()
 
 # ------------------------------------------------------------------ #
+# gpio-sim sysfs sync                                                  #
+# ------------------------------------------------------------------ #
+
+def _gpio_sim_line_dir(line: int) -> Path | None:
+    for root in GPIO_SIM_ROOTS:
+        line_dir = root / f"sim_gpio{line}"
+        if line_dir.exists():
+            return line_dir
+    return None
+
+
+def _gpio_sim_value(line: int) -> bool | None:
+    line_dir = _gpio_sim_line_dir(line)
+    if line_dir is None:
+        return None
+    try:
+        return (line_dir / "value").read_text(encoding="utf-8").strip() == "1"
+    except OSError:
+        return None
+
+
+def _gpio_sim_set_input(line: int, value: bool) -> None:
+    line_dir = _gpio_sim_line_dir(line)
+    if line_dir is None:
+        return
+    try:
+        (line_dir / "pull").write_text("pull-up\n" if value else "pull-down\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"[bridge] gpio-sim input sync failed line={line}: {exc}")
+
+
+async def poll_gpio_sim_outputs():
+    while True:
+        for line in GPIO_SIM_OUTPUT_LINES:
+            value = _gpio_sim_value(line)
+            if value is None:
+                continue
+            if state["gpio"]["leds"].get(line) != value:
+                state["gpio"]["leds"][line] = value
+                await broadcast({"type": "led", "line": line, "value": value})
+        await asyncio.sleep(0.1)
+
+# ------------------------------------------------------------------ #
 # WebSocket broadcast                                                  #
 # ------------------------------------------------------------------ #
 
@@ -62,6 +109,8 @@ async def broadcast(msg: dict):
 
 async def set_button(line: int, value: bool):
     state["gpio"]["buttons"][line] = value
+    if line in GPIO_SIM_INPUT_LINES:
+        _gpio_sim_set_input(line, value)
     await broadcast({"type": "button", "line": line, "value": value})
 
 
@@ -283,6 +332,7 @@ async def main():
 
     # Unix socket server in background thread
     threading.Thread(target=unix_server_thread, args=(loop,), daemon=True).start()
+    asyncio.create_task(poll_gpio_sim_outputs())
 
     # WebSocket server
     ws_server = await websockets.serve(ws_handler, "0.0.0.0", WS_PORT)
