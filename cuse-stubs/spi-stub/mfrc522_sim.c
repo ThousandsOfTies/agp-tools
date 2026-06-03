@@ -1,25 +1,18 @@
 /*
- * spi_shim.c — LD_PRELOAD shim for /dev/spidev0.0 (MFRC-522 simulation)
+ * mfrc522_sim.c — MFRC-522 register simulation for the CUSE SPI stub.
  *
- * Intercepts open()/ioctl() for SPI devices and simulates the MFRC-522
- * RFID reader register protocol. Card-present state is queried from the
- * bridge (/tmp/hw_sim.sock) so the HTML panel can trigger taps.
+ * Ported from spi_shim.c (LD_PRELOAD). The register/FIFO state machine is
+ * unchanged; only the entry point differs: instead of intercepting
+ * SPI_IOC_MESSAGE inside the application, cuse_spi feeds each transfer here
+ * via mfrc522_sim_transfer().
  *
- * Protocol (MFRC-522 SPI):
- *   Each transfer = 2 bytes
- *     byte0: address byte = (reg << 1) & 0x7E, MSB=1 for READ, 0 for WRITE
- *     byte1: data (write) or 0x00 (read), response in byte1
+ * Card-present state is read from the web bridge (/tmp/hw_sim.sock) so the
+ * HTML panel / `agp sim rfid tap` can trigger taps.
  */
 
-#define _GNU_SOURCE
-#include <sys/mman.h>
-#include <dlfcn.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <linux/spi/spidev.h>
+#include "mfrc522_sim.h"
+
 #include <pthread.h>
-#include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,17 +21,9 @@
 #include <unistd.h>
 
 #define SIM_SOCK "/tmp/hw_sim.sock"
-#define MAX_FDS  1024
 
 /* ------------------------------------------------------------------ */
-/* fd registry                                                          */
-/* ------------------------------------------------------------------ */
-
-static int  spi_fd_flag[MAX_FDS];
-static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
-
-/* ------------------------------------------------------------------ */
-/* MFRC-522 register state                                              */
+/* MFRC-522 register map                                                */
 /* ------------------------------------------------------------------ */
 
 #define COMMAND_REG     0x01
@@ -64,6 +49,7 @@ static uint8_t regs[64];
 static uint8_t fifo[64];
 static int     fifo_w = 0, fifo_r = 0;
 static uint8_t last_uid[4] = {0};
+static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 
 /* ------------------------------------------------------------------ */
 /* Bridge connection (query card state)                                 */
@@ -89,11 +75,19 @@ static int bridge_get_card(uint8_t *uid_out) {
     int s = bridge_connect();
     if (s < 0) return 0;
     const char *req = "{\"req\":\"get\",\"device\":\"rfid\"}\n";
-    if (write(s, req, strlen(req)) < 0) return 0;
+    if (write(s, req, strlen(req)) < 0) {
+        close(bridge_fd);
+        bridge_fd = -1;
+        return 0;
+    }
 
     char resp[256] = {0};
     int n = read(s, resp, sizeof(resp) - 1);
-    if (n <= 0) return 0;
+    if (n <= 0) {
+        close(bridge_fd);
+        bridge_fd = -1;
+        return 0;
+    }
 
     /* Parse "present": true and "uid": "XX:XX:XX:XX" (handle whitespace) */
     char *p = strstr(resp, "\"present\"");
@@ -106,7 +100,6 @@ static int bridge_get_card(uint8_t *uid_out) {
     if (!p) return 0;
     p += 5;
     while (*p == ' ' || *p == ':' || *p == '"') p++;
-    /* Parse UID hex bytes separated by ':' */
     for (int i = 0; i < 4; i++) {
         if (!*p) return 0;
         unsigned int v = 0;
@@ -122,7 +115,7 @@ static int bridge_get_card(uint8_t *uid_out) {
 /* MFRC-522 register simulation                                         */
 /* ------------------------------------------------------------------ */
 
-static void mfrc_init(void) {
+static void mfrc_reset(void) {
     memset(regs, 0, sizeof(regs));
     fifo_w = fifo_r = 0;
     regs[VERSION_REG] = 0x92;        /* MFRC-522 v2.0 */
@@ -130,7 +123,6 @@ static void mfrc_init(void) {
 
 /* Called after a TRANSCEIVE command to simulate card response */
 static void simulate_transceive(void) {
-    /* Look at FIFO contents to determine what was sent */
     if (fifo_w == 0) {
         regs[COM_IRQ_REG] |= 0x01;   /* TimerIRq → no card */
         return;
@@ -138,10 +130,9 @@ static void simulate_transceive(void) {
 
     uint8_t cmd_byte = fifo[0];
 
-    /* Check card presence via bridge */
     uint8_t uid[4];
     int present = bridge_get_card(uid);
-    fprintf(stderr, "[spi_shim] transceive cmd=0x%02x present=%d uid=%02X:%02X:%02X:%02X\n",
+    fprintf(stderr, "[cuse_spi] transceive cmd=0x%02x present=%d uid=%02X:%02X:%02X:%02X\n",
             cmd_byte, present, uid[0], uid[1], uid[2], uid[3]);
 
     if (!present) {
@@ -150,7 +141,6 @@ static void simulate_transceive(void) {
         return;
     }
 
-    /* Decide response based on first FIFO byte */
     uint8_t cmd = cmd_byte;
     fifo_r = fifo_w = 0;
 
@@ -184,18 +174,15 @@ static uint8_t reg_read(uint8_t reg) {
         }
         return 0;
     }
-    return regs[reg];
+    return regs[reg & 0x3F];
 }
 
 static void reg_write(uint8_t reg, uint8_t val) {
+    reg &= 0x3F;
     if (reg == COMMAND_REG) {
         regs[reg] = val & 0x0F;
         if ((val & 0x0F) == CMD_SOFT_RESET) {
-            mfrc_init();
-        } else if ((val & 0x0F) == CMD_TRANSCEIVE) {
-            /* TRANSCEIVE will start once StartSend bit is set */
-        } else if ((val & 0x0F) == CMD_IDLE) {
-            /* idle */
+            mfrc_reset();
         }
         return;
     }
@@ -221,114 +208,30 @@ static void reg_write(uint8_t reg, uint8_t val) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Intercepted libc functions                                           */
+/* Public API                                                           */
 /* ------------------------------------------------------------------ */
 
-static int (*real_open)(const char *, int, ...)   = NULL;
-static int (*real_open64)(const char *, int, ...) = NULL;
-static int (*real_ioctl)(int, unsigned long, ...) = NULL;
-static int (*real_close)(int)                     = NULL;
-
-__attribute__((constructor)) static void shim_init(void) {
-    real_open   = dlsym(RTLD_NEXT, "open");
-    real_open64 = dlsym(RTLD_NEXT, "open64");
-    real_ioctl  = dlsym(RTLD_NEXT, "ioctl");
-    real_close  = dlsym(RTLD_NEXT, "close");
-    mfrc_init();
-    fprintf(stderr, "[spi_shim] loaded (MFRC-522 sim)\n");
+void mfrc522_sim_init(void) {
+    pthread_mutex_lock(&mu);
+    mfrc_reset();
+    pthread_mutex_unlock(&mu);
+    fprintf(stderr, "[cuse_spi] MFRC-522 sim initialised (VersionReg=0x92)\n");
 }
 
-static int is_spi_path(const char *p) {
-    return strncmp(p, "/dev/spidev", 11) == 0;
-}
+void mfrc522_sim_transfer(const uint8_t *tx, uint8_t *rx, size_t len) {
+    if (rx) memset(rx, 0, len);
+    if (len < 2) return;
 
-int open(const char *path, int flags, ...) {
-    va_list ap; va_start(ap, flags);
-    mode_t mode = va_arg(ap, mode_t); va_end(ap);
-
-    if (is_spi_path(path)) {
-        int fd = memfd_create("spi_sim", 0);
-        if (fd >= 0 && fd < MAX_FDS) {
-            pthread_mutex_lock(&mu);
-            spi_fd_flag[fd] = 1;
-            pthread_mutex_unlock(&mu);
-            fprintf(stderr, "[spi_shim] open(%s) → fd=%d\n", path, fd);
-        }
-        return fd;
-    }
-    return real_open(path, flags, mode);
-}
-
-int open64(const char *path, int flags, ...) {
-    va_list ap; va_start(ap, flags);
-    mode_t mode = va_arg(ap, mode_t); va_end(ap);
-
-    if (is_spi_path(path)) {
-        int fd = memfd_create("spi_sim", 0);
-        if (fd >= 0 && fd < MAX_FDS) {
-            pthread_mutex_lock(&mu);
-            spi_fd_flag[fd] = 1;
-            pthread_mutex_unlock(&mu);
-        }
-        return fd;
-    }
-    return real_open64(path, flags, mode);
-}
-
-int close(int fd) {
-    if (fd >= 0 && fd < MAX_FDS) {
-        pthread_mutex_lock(&mu);
-        spi_fd_flag[fd] = 0;
-        pthread_mutex_unlock(&mu);
-    }
-    return real_close(fd);
-}
-
-int ioctl(int fd, unsigned long req, ...) {
-    va_list ap; va_start(ap, req);
-    void *arg = va_arg(ap, void *); va_end(ap);
-
-    if (fd < 0 || fd >= MAX_FDS) return real_ioctl(fd, req, arg);
+    uint8_t addr_byte = tx ? tx[0] : 0;
+    int is_read = (addr_byte & 0x80) != 0;
+    uint8_t reg = (addr_byte >> 1) & 0x3F;
 
     pthread_mutex_lock(&mu);
-    int is_spi = spi_fd_flag[fd];
+    if (is_read) {
+        uint8_t v = reg_read(reg);
+        if (rx) rx[1] = v;
+    } else {
+        reg_write(reg, tx ? tx[1] : 0);
+    }
     pthread_mutex_unlock(&mu);
-
-    if (!is_spi) return real_ioctl(fd, req, arg);
-
-    /* SPI_IOC_WR_MODE / SPI_IOC_WR_MAX_SPEED_HZ etc. — accept silently */
-    if (((req >> 8) & 0xFF) == SPI_IOC_MAGIC && (req & 0x40000000UL) == 0
-        && _IOC_NR(req) != 0) {
-        return 0;
-    }
-
-    /* SPI_IOC_MESSAGE(N) */
-    if (_IOC_TYPE(req) == SPI_IOC_MAGIC && _IOC_NR(req) == 0) {
-        struct spi_ioc_transfer *tr = (struct spi_ioc_transfer *)arg;
-        int n = _IOC_SIZE(req) / sizeof(struct spi_ioc_transfer);
-        for (int i = 0; i < n; i++) {
-            const uint8_t *tx = (const uint8_t *)(uintptr_t)tr[i].tx_buf;
-            uint8_t       *rx = (uint8_t *)(uintptr_t)tr[i].rx_buf;
-            int len = tr[i].len;
-            /* MFRC-522 protocol: 2-byte transfers (addr, data) */
-            if (len >= 2 && tx) {
-                uint8_t addr_byte = tx[0];
-                int is_read = (addr_byte & 0x80) != 0;
-                uint8_t reg = (addr_byte >> 1) & 0x3F;
-                if (is_read) {
-                    if (rx) { rx[0] = 0; rx[1] = reg_read(reg); }
-                } else {
-                    reg_write(reg, tx[1]);
-                    if (rx) memset(rx, 0, len);
-                }
-                /* For longer transfers, pad zeros */
-                if (rx && len > 2) memset(rx + 2, 0, len - 2);
-            } else if (rx) {
-                memset(rx, 0, len);
-            }
-        }
-        return n * 2;  /* roughly bytes transferred */
-    }
-
-    return real_ioctl(fd, req, arg);
 }
