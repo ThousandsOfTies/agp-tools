@@ -25,7 +25,7 @@
     │       └─ MFRC-522 register sim → bridge.py
     │
     └─ bridge.py
-         ├─ Unix socket /tmp/hw_sim.sock (シム/スタブ ⇔ bridge)
+         ├─ Unix socket /run/agentcockpit/hw_sim.sock (シム/スタブ ⇔ bridge)
          ├─ WebSocket  ws://0.0.0.0:8765 (bridge ⇔ panel)
          └─ HTTP       http://0.0.0.0:8080 (panel HTML/CSS/JS 配信)
                 ↓
@@ -49,7 +49,7 @@ Codespace build VM で `embedded-poc-app` と `agp-tools` を `make` 済みで�
 ```bash
 ssh vibecode-graviton
 ~/venv/bin/python3 ~/web-bridge/bridge.py
-# → [bridge] Unix socket listening: /tmp/hw_sim.sock
+# → [bridge] Unix socket listening: /run/agentcockpit/hw_sim.sock
 # → [bridge] WebSocket  ws://0.0.0.0:8765
 # → [bridge] HTTP panel http://0.0.0.0:8080
 ```
@@ -71,7 +71,7 @@ sudo chmod 666 /dev/i2c-1
 ```bash
 ssh vibecode-graviton
 LD_PRELOAD="$HOME/gpio_shim.so $HOME/spi_shim.so" ~/sensor_demo
-# → [gpio_shim] loaded, bridge=/tmp/hw_sim.sock
+# → [gpio_shim] loaded, bridge=/run/agentcockpit/hw_sim.sock
 # → [spi_shim] loaded (MFRC-522 sim)
 # → Sensor Demo started. Press Ctrl+C to quit.
 ```

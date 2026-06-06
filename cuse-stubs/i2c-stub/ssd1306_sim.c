@@ -3,7 +3,7 @@
  *
  * Captures I2C writes to address 0x3C, parses the SSD1306 protocol,
  * maintains a 128x64 framebuffer, and pushes updates to the web bridge
- * via /tmp/hw_sim.sock.
+ * via AGP_HW_SIM_SOCK, AGP_RUNTIME_DIR/hw_sim.sock, or /tmp/hw_sim.sock.
  *
  * SSD1306 I2C protocol (after slave address):
  *   Each transaction starts with a control byte:
@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -37,12 +38,34 @@ static int     bridge_fd = -1;
 /* Bridge connection                                                   */
 /* ------------------------------------------------------------------ */
 
+static const char *bridge_socket_path(void) {
+    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    if (explicit_path && explicit_path[0]) {
+        return explicit_path;
+    }
+
+    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    if (runtime_dir && runtime_dir[0]) {
+        static char path[108];
+        snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);
+        return path;
+    }
+
+    return "/tmp/hw_sim.sock";
+}
+
 static int bridge_connect(void) {
     if (bridge_fd >= 0) return bridge_fd;
     bridge_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (bridge_fd < 0) return -1;
     struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    strncpy(addr.sun_path, "/tmp/hw_sim.sock", sizeof(addr.sun_path) - 1);
+    const char *sock_path = bridge_socket_path();
+    if (strlen(sock_path) >= sizeof(addr.sun_path)) {
+        close(bridge_fd);
+        bridge_fd = -1;
+        return -1;
+    }
+    strcpy(addr.sun_path, sock_path);
     if (connect(bridge_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(bridge_fd);
         bridge_fd = -1;

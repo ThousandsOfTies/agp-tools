@@ -23,7 +23,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#define SIM_SOCK "/tmp/hw_sim.sock"
 #define GPIO_LINES 54
 #define MAX_TRACKED_LINES 16
 
@@ -50,6 +49,22 @@ typedef struct {
 
 static int bridge_fd = -1;
 
+static const char *bridge_socket_path(void) {
+    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    if (explicit_path && explicit_path[0]) {
+        return explicit_path;
+    }
+
+    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    if (runtime_dir && runtime_dir[0]) {
+        static char path[108];
+        snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);
+        return path;
+    }
+
+    return "/tmp/hw_sim.sock";
+}
+
 static const line_def_t *find_line(unsigned int offset) {
     for (int i = 0; line_defs[i].name != NULL; i++) {
         if (line_defs[i].offset == offset) {
@@ -70,7 +85,13 @@ static int bridge_connect(void) {
     }
 
     struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    strncpy(addr.sun_path, SIM_SOCK, sizeof(addr.sun_path) - 1);
+    const char *sock_path = bridge_socket_path();
+    if (strlen(sock_path) >= sizeof(addr.sun_path)) {
+        close(bridge_fd);
+        bridge_fd = -1;
+        return -1;
+    }
+    strcpy(addr.sun_path, sock_path);
     if (connect(bridge_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(bridge_fd);
         bridge_fd = -1;

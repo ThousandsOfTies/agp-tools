@@ -8,7 +8,8 @@
  * Ported from the LD_PRELOAD spi_shim so that the same MFRC-522 register
  * protocol can be served behind a real /dev/spidev0.0 character device
  * created via CUSE. Card-present state is queried from the web bridge
- * (/tmp/hw_sim.sock), so `agp sim rfid tap` drives the simulated reader.
+ * (AGP_HW_SIM_SOCK or AGP_RUNTIME_DIR/hw_sim.sock), so `agp sim ui rfid tap`
+ * drives the simulated reader.
  */
 
 void mfrc522_sim_init(void);

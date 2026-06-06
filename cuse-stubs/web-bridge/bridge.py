@@ -1,7 +1,7 @@
 """
 bridge.py — Hardware simulator web bridge
 
-Unix socket (/tmp/hw_sim.sock) ↔ WebSocket ↔ Browser HTML panel
+Unix socket ↔ WebSocket ↔ Browser HTML panel
 
 Devices:
   GPIO : LED (output), Button (input)
@@ -19,7 +19,17 @@ from pathlib import Path
 import websockets
 from aiohttp import web
 
-UNIX_SOCK  = "/tmp/hw_sim.sock"
+def _runtime_socket_path() -> str:
+    explicit = os.environ.get("AGP_HW_SIM_SOCK")
+    if explicit:
+        return explicit
+    runtime_dir = os.environ.get("AGP_RUNTIME_DIR")
+    if runtime_dir:
+        return str(Path(runtime_dir) / "hw_sim.sock")
+    return "/tmp/hw_sim.sock"
+
+
+UNIX_SOCK  = _runtime_socket_path()
 HTTP_PORT  = 8080
 WS_PORT    = 8765
 PANEL_DIR  = Path(__file__).parent / "panel"
@@ -224,6 +234,7 @@ def handle_stub_message(raw: str, loop) -> str | None:
 
 
 def unix_server_thread(loop):
+    Path(UNIX_SOCK).parent.mkdir(parents=True, exist_ok=True)
     if os.path.exists(UNIX_SOCK):
         os.remove(UNIX_SOCK)
 

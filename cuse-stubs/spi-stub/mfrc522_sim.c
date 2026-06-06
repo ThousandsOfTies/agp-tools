@@ -6,8 +6,8 @@
  * SPI_IOC_MESSAGE inside the application, cuse_spi feeds each transfer here
  * via mfrc522_sim_transfer().
  *
- * Card-present state is read from the web bridge (/tmp/hw_sim.sock) so the
- * HTML panel / `agp sim rfid tap` can trigger taps.
+ * Card-present state is read from the web bridge socket so the HTML panel /
+ * `agp sim ui rfid tap` can trigger taps.
  */
 
 #include "mfrc522_sim.h"
@@ -19,8 +19,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-
-#define SIM_SOCK "/tmp/hw_sim.sock"
 
 /* ------------------------------------------------------------------ */
 /* MFRC-522 register map                                                */
@@ -57,12 +55,34 @@ static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 
 static int bridge_fd = -1;
 
+static const char *bridge_socket_path(void) {
+    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    if (explicit_path && explicit_path[0]) {
+        return explicit_path;
+    }
+
+    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    if (runtime_dir && runtime_dir[0]) {
+        static char path[108];
+        snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);
+        return path;
+    }
+
+    return "/tmp/hw_sim.sock";
+}
+
 static int bridge_connect(void) {
     if (bridge_fd >= 0) return bridge_fd;
     bridge_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (bridge_fd < 0) return -1;
     struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    strncpy(addr.sun_path, SIM_SOCK, sizeof(addr.sun_path) - 1);
+    const char *sock_path = bridge_socket_path();
+    if (strlen(sock_path) >= sizeof(addr.sun_path)) {
+        close(bridge_fd);
+        bridge_fd = -1;
+        return -1;
+    }
+    strcpy(addr.sun_path, sock_path);
     if (connect(bridge_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(bridge_fd);
         bridge_fd = -1;
