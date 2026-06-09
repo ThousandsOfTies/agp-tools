@@ -1,4 +1,4 @@
-/*
+﻿/*
  * mfrc522_sim.c — MFRC-522 register simulation for the CUSE SPI stub.
  *
  * Ported from spi_shim.c (LD_PRELOAD). The register/FIFO state machine is
@@ -7,7 +7,7 @@
  * via mfrc522_sim_transfer().
  *
  * Card-present state is read from the web bridge socket so the HTML panel /
- * `agp sim ui rfid tap` can trigger taps.
+ * `gar sim ui rfid tap` can trigger taps.
  */
 
 #include "mfrc522_sim.h"
@@ -56,12 +56,12 @@ static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 static int bridge_fd = -1;
 
 static const char *bridge_socket_path(void) {
-    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    const char *explicit_path = getenv("GAR_HW_SIM_SOCK");
     if (explicit_path && explicit_path[0]) {
         return explicit_path;
     }
 
-    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    const char *runtime_dir = getenv("GAR_RUNTIME_DIR");
     if (runtime_dir && runtime_dir[0]) {
         static char path[108];
         snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);

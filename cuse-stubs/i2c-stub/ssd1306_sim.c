@@ -1,9 +1,9 @@
-/*
+﻿/*
  * ssd1306_sim.c — SSD1306 OLED simulation for cuse_i2c
  *
  * Captures I2C writes to address 0x3C, parses the SSD1306 protocol,
  * maintains a 128x64 framebuffer, and pushes updates to the web bridge
- * via AGP_HW_SIM_SOCK, AGP_RUNTIME_DIR/hw_sim.sock, or /tmp/hw_sim.sock.
+ * via GAR_HW_SIM_SOCK, GAR_RUNTIME_DIR/hw_sim.sock, or /tmp/hw_sim.sock.
  *
  * SSD1306 I2C protocol (after slave address):
  *   Each transaction starts with a control byte:
@@ -39,12 +39,12 @@ static int     bridge_fd = -1;
 /* ------------------------------------------------------------------ */
 
 static const char *bridge_socket_path(void) {
-    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    const char *explicit_path = getenv("GAR_HW_SIM_SOCK");
     if (explicit_path && explicit_path[0]) {
         return explicit_path;
     }
 
-    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    const char *runtime_dir = getenv("GAR_RUNTIME_DIR");
     if (runtime_dir && runtime_dir[0]) {
         static char path[108];
         snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);

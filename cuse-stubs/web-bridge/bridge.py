@@ -1,4 +1,4 @@
-"""
+﻿"""
 bridge.py — Hardware simulator web bridge
 
 Unix socket ↔ WebSocket ↔ Browser HTML panel
@@ -20,10 +20,10 @@ import websockets
 from aiohttp import web
 
 def _runtime_socket_path() -> str:
-    explicit = os.environ.get("AGP_HW_SIM_SOCK")
+    explicit = os.environ.get("GAR_HW_SIM_SOCK")
     if explicit:
         return explicit
-    runtime_dir = os.environ.get("AGP_RUNTIME_DIR")
+    runtime_dir = os.environ.get("GAR_RUNTIME_DIR")
     if runtime_dir:
         return str(Path(runtime_dir) / "hw_sim.sock")
     return "/tmp/hw_sim.sock"

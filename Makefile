@@ -1,4 +1,4 @@
-# AgentCockpit simulation tools
+﻿# Gapless Agent Runtime simulation tools
 
 CC = aarch64-linux-gnu-gcc
 

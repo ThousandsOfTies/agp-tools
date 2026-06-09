@@ -1,6 +1,6 @@
 # cuse_gpio
 
-Experimental CUSE GPIO chip stub for AgentCockpit.
+Experimental CUSE GPIO chip stub for Gapless Agent Runtime.
 
 This stub can expose `/dev/gpiochip0`, answer chip/line metadata ioctls, and
 route simple output/input value operations to `web-bridge/bridge.py`.
@@ -37,12 +37,12 @@ Verified on 2026-06-02:
 - Built in Codespace with `aarch64-linux-gnu-gcc`.
 - Deployed to EC2 Graviton as `/home/ubuntu/cuse_gpio`.
 - EC2 already exposes a real `/dev/gpiochip0` (`ARMH0061:00`), so the spike was
-  run as `/dev/agp-gpiochip0` to avoid collision.
+  run as `/dev/gar-gpiochip0` to avoid collision.
 - `GPIO_GET_CHIPINFO_IOCTL` succeeds and returns:
 
 ```text
 name= gpiochip0_sim
-label= AgentCockpit CUSE GPIO
+label= gar CUSE GPIO
 lines= 54
 ```
 
@@ -55,8 +55,8 @@ not solve the line-request fd handoff limitation described above.
 This `cuse_gpio` spike is a **dead end for transparent GPIO** (CUSE cannot hand a
 line-request fd to the caller — see "Important limitation"). Do **not** invest
 more in making it transparent. Instead, evaluate the kernel-backed `gpio-sim`
-path, which is the preferred candidate in
-[docs/12_CUSE_MIGRATION_PLAN.md §2.3](../../../AgentCockpit/docs/12_CUSE_MIGRATION_PLAN.md).
+path, which is the preferred candidate (the GPIO `gpio-sim` migration has since
+been completed).
 
 Run these on EC2 Graviton (this dev box has no EC2 access; the agent on EC2 does):
 
@@ -76,7 +76,7 @@ Run these on EC2 Graviton (this dev box has no EC2 access; the agent on EC2 does
    sudo modprobe gpio-sim
    sudo mount -t configfs none /sys/kernel/config 2>/dev/null || true
    cd /sys/kernel/config/gpio-sim
-   sudo mkdir agp && cd agp
+   sudo mkdir gar && cd gar
    echo 8 | sudo tee bank0/num_lines        # create bank0 dir first if needed
    echo 1 | sudo tee live
    ls -l /dev/ | grep gpiochip               # expect a new gpiochipN
@@ -94,8 +94,7 @@ Run these on EC2 Graviton (this dev box has no EC2 access; the agent on EC2 does
    - **GPIO_SIM_OK** + kernel version + the new `/dev/gpiochipN` name → we switch
      the GPIO plan to gpio-sim and the web-bridge talks to its sysfs/configfs
      value attributes instead of the bridge socket.
-   - **NO_GPIO_SIM** → fall back to the CUSE internal-virtual-fd design in
-     [docs/12 §4.2](../../../AgentCockpit/docs/12_CUSE_MIGRATION_PLAN.md), i.e. keep
+   - **NO_GPIO_SIM** → fall back to the CUSE internal-virtual-fd design, i.e. keep
      a real line fd inside the daemon and multiplex follow-up ioctls on the main
      fd (this is what `gpio_shim.so` already does in LD_PRELOAD form).
 

@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-Run an AgentCockpit hardware scenario against bridge.py.
+Run an Gapless Agent Runtime hardware scenario against bridge.py.
 
 The scenario format is intentionally small JSON so AI agents and CI jobs can
 generate and execute it without a dedicated test framework.

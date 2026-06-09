@@ -1,4 +1,4 @@
-/*
+﻿/*
  * cuse_gpio.c — experimental CUSE-based GPIO chip stub
  *
  * Creates /dev/gpiochip0 (or the name given by --devname) as a userspace
@@ -50,12 +50,12 @@ typedef struct {
 static int bridge_fd = -1;
 
 static const char *bridge_socket_path(void) {
-    const char *explicit_path = getenv("AGP_HW_SIM_SOCK");
+    const char *explicit_path = getenv("GAR_HW_SIM_SOCK");
     if (explicit_path && explicit_path[0]) {
         return explicit_path;
     }
 
-    const char *runtime_dir = getenv("AGP_RUNTIME_DIR");
+    const char *runtime_dir = getenv("GAR_RUNTIME_DIR");
     if (runtime_dir && runtime_dir[0]) {
         static char path[108];
         snprintf(path, sizeof(path), "%s/hw_sim.sock", runtime_dir);
@@ -194,7 +194,7 @@ static void reply_chipinfo(fuse_req_t req, void *arg, size_t out_bufsz) {
     struct gpiochip_info info;
     memset(&info, 0, sizeof(info));
     strncpy(info.name, "gpiochip0_sim", sizeof(info.name) - 1);
-    strncpy(info.label, "AgentCockpit CUSE GPIO", sizeof(info.label) - 1);
+    strncpy(info.label, "gar CUSE GPIO", sizeof(info.label) - 1);
     info.lines = GPIO_LINES;
     fuse_reply_ioctl(req, 0, &info, sizeof(info));
 }
