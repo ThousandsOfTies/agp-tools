@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ssd1306_sim.c — SSD1306 OLED simulation for cuse_i2c
  *
  * Captures I2C writes to address 0x3C, parses the SSD1306 protocol,

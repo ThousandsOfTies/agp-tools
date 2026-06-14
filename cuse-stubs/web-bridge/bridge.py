@@ -1,4 +1,4 @@
-﻿"""
+"""
 bridge.py — Hardware simulator web bridge
 
 Unix socket ↔ WebSocket ↔ Browser HTML panel

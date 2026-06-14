@@ -1,4 +1,4 @@
-﻿/*
+/*
  * cuse_gpio.c — experimental CUSE-based GPIO chip stub
  *
  * Creates /dev/gpiochip0 (or the name given by --devname) as a userspace

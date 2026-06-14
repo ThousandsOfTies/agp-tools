@@ -1,4 +1,4 @@
-﻿/*
+/*
  * mfrc522_sim.c — MFRC-522 register simulation for the CUSE SPI stub.
  *
  * Ported from spi_shim.c (LD_PRELOAD). The register/FIFO state machine is
